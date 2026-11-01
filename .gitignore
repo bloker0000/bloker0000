@@ -1,0 +1,6 @@
+.claude/
+.vscode/
+.env*
+node_modules/
+Thumbs.db
+desktop.ini
