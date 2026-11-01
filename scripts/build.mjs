@@ -89,32 +89,78 @@ const eye = (side) => (t) => {
 }
 
 const css = [
-  '.head,.el,.er,.bl,.mouth,.cur,.press,.arrow,.hand{animation-duration:16s;animation-timing-function:linear;animation-iteration-count:infinite}',
+  '.head,.el,.er,.bl,.mouth,.cur,.arrow,.hand,.down{animation-duration:16s;animation-timing-function:linear;animation-iteration-count:infinite}',
   '.head{animation-name:head}.el{animation-name:el}.er{animation-name:er}',
   '.bl{animation-name:blink;transform-box:fill-box;transform-origin:center}',
   '.mouth{animation-name:mouth;transform-box:fill-box;transform-origin:center}',
   '.cur{animation-name:cur;transform:translate(-60px,-60px)}',
-  '.press{animation-name:press}',
-  '.arrow{animation-name:arrow}.hand{animation-name:hand;opacity:0}',
+  '.arrow{animation-name:arrow}.hand{animation-name:hand;opacity:0}.down{animation-name:down;opacity:0}',
   keyframes('head', (t) => { const [gx, gy] = gaze(t); return move(gx * MAX_X * HEAD, gy * MAX_Y * HEAD + 3 * squeeze(t)) }),
   keyframes('el', eye(1)),
   keyframes('er', eye(-1)),
   keyframes('blink', (t) => `transform:scaleY(${blink(t).toFixed(2)})`),
   keyframes('mouth', (t) => { const k = Math.max(0.6 * near(t), squeeze(t)); return `transform:scale(${(1 + 0.05 * k).toFixed(3)},${(1 - 0.18 * k).toFixed(3)})` }),
   keyframes('cur', (t) => move(...cursor(t))),
-  // the click: hand shrinks toward the fingertip and dips
-  keyframes('press', (t) => `transform:translate(0px,${(2 * press(t)).toFixed(2)}px) scale(${(1 - 0.2 * press(t)).toFixed(3)})`),
   // turns into the link hand over the nose, the face is clickable after all
   keyframes('arrow', (t) => `opacity:${toNose(t) < 70 ? 0 : 1}`),
-  keyframes('hand', (t) => `opacity:${toNose(t) < 70 ? 1 : 0}`),
+  keyframes('hand', (t) => `opacity:${toNose(t) < 70 && press(t) < 0.5 ? 1 : 0}`),
+  keyframes('down', (t) => `opacity:${press(t) >= 0.5 ? 1 : 0}`),
   '@media (prefers-reduced-motion:reduce){*{animation:none!important}}',
 ].join('')
 
 const [[lx, ly], [rx, ry]] = EYES.map((e) => px(e))
-const ARROW = 'M0 0V17.6L4.3 13.6L7.2 20.3L10 19.1L7.2 12.6H13Z'
-const HAND = 'M5.5 .6C4.7 .6 4 1.3 4 2.1V11.6L2.9 10.5C2.2 9.8 1 9.8.4 10.5-.1 11.1 0 12 .5 12.6L4.5 18.3C5.3 19.6 6.3 20.7 7.4 21.6H13.3C14.6 20.2 15.4 18.6 15.6 16.6V11.1C15.6 10.3 15 9.7 14.2 9.7 13.4 9.7 12.8 10.3 12.8 11.1V10.4C12.8 9.6 12.2 9 11.4 9 10.6 9 10 9.6 10 10.4V9.7C10 8.9 9.4 8.3 8.6 8.3 7.8 8.3 7.1 8.9 7.1 9.7V2.1C7.1 1.3 6.4.6 5.5.6Z'
-const pointer = (d, join, extra = '') =>
-  `<path d="${d}" fill="${INK}" fill-opacity=".22" transform="translate(1.4 1.6)"/><path d="${d}" fill="#FFFFFF" stroke="${INK}" stroke-width="1.1" stroke-linejoin="${join}"/>${extra}`
+// pixel maps of the default windows cursors, # is the outline and o the white fill
+const ARROW = [
+  '#...........',
+  '##..........',
+  '#o#.........',
+  '#oo#........',
+  '#ooo#.......',
+  '#oooo#......',
+  '#ooooo#.....',
+  '#oooooo#....',
+  '#ooooooo#...',
+  '#oooooooo#..',
+  '#ooooooooo#.',
+  '#oooooo#####',
+  '#ooo#oo#....',
+  '#oo#.#oo#...',
+  '#o#..#oo#...',
+  '##....#oo#..',
+  '......#oo#..',
+  '.......##...',
+]
+const HAND = [
+  '......##..........',
+  '.....#oo#.........',
+  '.....#oo#.........',
+  '.....#oo#.........',
+  '.....#oo#.........',
+  '.....#oo#.........',
+  '.....#oo###.......',
+  '.....#oo#oo###....',
+  '.....#oo#oo#oo###.',
+  '.##..#oo#oo#oo#oo#',
+  '#oo#.#oo#oo#oo#oo#',
+  '#ooo##oo#oo#oo#oo#',
+  '#oooooooooooooooo#',
+  '.#ooooooooooooooo#',
+  '..#oooooooooooooo#',
+  '...#ooooooooooooo#',
+  '....#oooooooooooo#',
+  '.....#ooooooooooo#',
+  '.....#ooooooooooo#',
+  '.....#oooooooooo#.',
+  '.....#oooooooooo#.',
+  '.....############.',
+]
+// the click frame: same hand, index finger bent in by 4 pixels
+const HAND_DOWN = HAND.filter((_, y) => y < 2 || y > 5)
+// hx, hy is the hotspot, the pixel the click lands on
+function sprite(map, hx, hy) {
+  const runs = (re) => map.flatMap((row, y) => [...row.matchAll(re)].map((m) => `M${m.index - hx} ${y - hy}h${m[0].length}v1h-${m[0].length}z`)).join('')
+  return `<path d="${runs(/[#o]+/g)}" fill="${INK}" fill-opacity=".25" transform="translate(1 1)"/><path d="${runs(/o+/g)}" fill="#FFFFFF"/><path d="${runs(/#+/g)}" fill="${INK}"/>`
+}
 
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-labelledby="t">
 <title id="t">a smiley looking around until a cursor pokes it on the nose</title>
@@ -125,10 +171,11 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" 
 <g class="er"><circle class="bl" cx="${rx}" cy="${ry}" r="${n(EYES[1][2] * S)}"/></g>
 <g class="mouth"><path d="M${MOUTH.map(px).map((p) => p.join(' ')).join('L')}" fill="none" stroke="${INK}" stroke-width="${n(0.1174 * S)}" stroke-linecap="round" stroke-linejoin="round"/></g>
 </g>
-<g class="cur"><g class="press"><g transform="scale(1.3)">
-<g class="arrow">${pointer(ARROW, 'miter')}</g>
-<g class="hand"><g transform="translate(-5.5 -.6)">${pointer(HAND, 'round', `<path d="M7.1 9.7V12.8M10 10.4V13.2M12.8 11.1V13.6" stroke="${INK}" stroke-width=".9" stroke-linecap="round"/>`)}</g></g>
-</g></g></g>
+<g class="cur"><g transform="scale(1.12)" shape-rendering="crispEdges">
+<g class="arrow">${sprite(ARROW, 0, 0)}</g>
+<g class="hand">${sprite(HAND, 7, 0)}</g>
+<g class="down">${sprite(HAND_DOWN, 7, -4)}</g>
+</g></g>
 </svg>
 `
 
